@@ -1,0 +1,66 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def run_simulation(N=1000, snr_db=10):
+    # 1. Setup Parameters
+    fs = 1000          # Sampling frequency
+    fc = 50            # Carrier frequency
+    t_bit = np.arange(0, 0.1, 1/fs)  # 0.1s per bit
+    t_total = np.arange(0, N * 0.1, 1/fs)
+    
+    # 2. Generate Random Bits
+    bits = np.random.randint(0, 2, N)
+    # Expand bits to match the signal length
+    bit_stream = np.repeat(bits, len(t_bit))
+
+    # 3. Modulation Techniques
+    # ASK: Amplitude 1 for '1', 0 for '0'
+    ask_sig = bit_stream * np.sin(2 * np.pi * fc * t_total)
+    
+    # PSK: Phase 0 for '1', Phase pi for '0'
+    psk_sig = np.sin(2 * np.pi * fc * t_total + (1 - bit_stream) * np.pi)
+    
+    # FSK: freq fc for '1', freq fc/2 for '0'
+    f_stream = np.where(bit_stream == 1, fc, fc/2)
+    fsk_sig = np.sin(2 * np.pi * f_stream * t_total)
+
+    # 4. Add Noise (AWGN)
+    snr_linear = 10**(snr_db / 10)
+    signal_power = 0.5 # Average power of a sine wave
+    noise_power = signal_power / snr_linear
+    noise = np.random.normal(0, np.sqrt(noise_power), len(ask_sig))
+    
+    noisy_ask = ask_sig + noise
+
+    # 5. Simple Demodulation (ASK example)
+    # We check the average energy in each bit period
+    received_bits = []
+    samples_per_bit = len(t_bit)
+    for i in range(N):
+        segment = noisy_ask[i*samples_per_bit : (i+1)*samples_per_bit]
+        energy = np.mean(segment**2)
+        received_bits.append(1 if energy > 0.2 else 0) # 0.2 is the threshold
+    
+    # 6. BER Calculation
+    errors = np.sum(bits != np.array(received_bits))
+    ber = errors / N
+    
+    return t_total, ask_sig, noisy_ask, bits, received_bits, ber
+
+# Run and Plot
+t, clean, noisy, original, recovered, error_rate = run_simulation(N=10, snr_db=12)
+
+plt.figure(figsize=(12, 8))
+plt.subplot(3, 1, 1)
+plt.plot(t, clean)
+plt.title("Clean ASK Signal")
+plt.subplot(3, 1, 2)
+plt.plot(t, noisy)
+plt.title("Noisy ASK Signal (The Channel)")
+plt.subplot(3, 1, 3)
+plt.step(range(len(original)), original, label="Original")
+plt.step(range(len(recovered)), recovered, label="Recovered", linestyle="--")
+plt.legend()
+plt.title(f"Bit Comparison (BER: {error_rate})")
+plt.tight_layout()
+plt.show()
